@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gioco dell'Impostore - Vanilla SPA</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 15px; }
+        .container { max-width: 700px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #333; }
+        .hidden { display: none !important; }
+        input, select, button { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0056b3; }
+        .btn-green { background: #28a745; }
+        .btn-green:hover { background: #218838; }
+        .btn-red { background: #dc3545; }
+        .btn-red:hover { background: #c82333; }
+        .box-info { background: #e2f0cb; padding: 12px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #c8e6a6; }
+        .box-impostore { background: #ffebee !important; border: 2px solid #ef5350 !important; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 13px; }
+        th { background: #eee; }
+
+        @keyframes lampeggia {
+            0% { opacity: 1; }
+            50% { opacity: 0.2; }
+            100% { opacity: 1; }
+        }
+        .turno-avviso {
+            font-weight: bold;
+            animation: lampeggia 1s infinite;
+            color: #d9534f;
+        }
+        .testo-evidenziato {
+            font-weight: bold;
+        }
+        .json-box { background: #e9ecef; padding: 10px; margin-top: 15px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🎭 Gioco dell'Impostore (Vanilla SPA)</h2>
+
+    <!-- MENU PRINCIPALE SELEZIONE RUOLO -->
+    <div id="view-home">
+        <p>Benvenuto! Scegli come accedere:</p>
+        <button onclick="mostraLoginPartecipante()">Area Partecipante</button>
+        <button onclick="mostraAdmin()" class="btn-green">Pannello Amministratore</button>
+        
+        <div class="json-box">
+            <h3>💾 Gestione Dati (JSON)</h3>
+            <button onclick="esportaDatabaseJSON()" style="background: #17a2b8;">Esporta Stato in JSON</button>
+            <label style="display:block; margin-top:10px; font-size:14px;">Importa Stato da JSON:</label>
+            <input type="file" accept=".json" onchange="importaDatabaseJSON(event)">
+        </div>
+    </div>
+
+    <!-- AREA PARTECIPANTE -->
+    <div id="view-partecipante" class="hidden">
+        <button onclick="tornaHome()" style="background: #6c757d; width: auto; padding: 5px 10px;">⬅ Indietro</button>
+        <h3>🔑 Accesso Partecipante</h3>
+        <div id="partecipante-login-form">
+            <input type="text" id="p-alias" placeholder="Inserisci Alias (es. Pippo)">
+            <input type="password" id="p-password" placeholder="Password">
+            <button onclick="loginPartecipante()" class="btn-green">Accedi</button>
+        </div>
+
+        <div id="partecipante-gioco" class="hidden">
+            <p><strong>Benvenuto, <span id="lbl-mio-alias"></span></strong></p>
+            <div id="card-ruolo" class="box-info">
+                <p><strong>Argomento:</strong> <span id="lbl-argomento">-</span></p>
+                <p><strong>Parola Segreta / Ruolo:</strong> <span id="lbl-parola" style="font-weight:bold;">-</span></p>
+            </div>
+            <p>⏳ Turno attuale: Giro <span id="lbl-giro">1</span> | <span class="testo-evidenziato">Tocca a: <span id="lbl-turno-corrente" class="turno-avviso">-</span></span></p>
+
+            <div id="box-impostore-scoperto" class="hidden" style="background: #ffccbc; padding: 15px; border-radius: 5px; border: 2px solid #ff5722;">
+                <h4 style="color: #d32f2f; margin-top:0;">🚨 SEI STATO SCOPERTO!</h4>
+                <p>Prova ad indovinare la parola segreta:</p>
+                <input type="text" id="input-parola-impostore" placeholder="Parola segreta...">
+                <button onclick="tentativoParolaImpostore()" class="btn-red">Invia Tentativo</button>
+            </div>
+
+            <hr>
+            <h4>✍️ Inserisci il tuo indizio</h4>
+            <input type="text" id="input-indizio" placeholder="Scrivi il tuo indizio...">
+            <button onclick="inviaIndizio()" id="btn-invia-indizio">Invia Indizio</button>
+
+            <hr>
+            <h4>🎯 Accusa un Concorrente (Tentativi rimasti: <span id="lbl-tentativi">3</span>)</h4>
+            <select id="select-accusato">
+                <option value="">-- Seleziona sospettato --</option>
+            </select>
+            <button onclick="accusaConcorrente()" class="btn-red">Accusa</button>
+        </div>
+    </div>
+
+    <!-- PANNELLO AMMINISTRATORE -->
+    <div id="view-admin" class="hidden">
+        <button onclick="tornaHome()" style="background: #6c757d; width: auto; padding: 5px 10px;">⬅ Indietro</button>
+        <h3>👑 Pannello Amministratore</h3>
+        
+        <h4>Gestione Partecipanti & Torneo</h4>
+        <div id="admin-iscritti-list"></div>
+        <button onclick="avviaNuovoTorneo()" class="btn-green">🚀 Avvia / Crea Torneo (Seleziona 4+ giocatori)</button>
+
+        <hr>
+        <h4>📊 Stato Partita & Classifica</h4>
+        <p>Sessione: <span id="admin-sessione">1</span> | Parola Segreta Attuale: <strong id="admin-parola-segreta">-</strong></p>
+        <p>⏳ <span class="testo-evidenziato">Tocca a: <span id="admin-lbl-tocca">-</span></span></p>
+        <table>
+            <thead>
+                <tr><th>Alias</th><th>Punti</th><th>Tentativi</th><th>Ruolo</th></tr>
+            </thead>
+            <tbody id="admin-classifica-tbody"></tbody>
+        </table>
+
+        <h4 style="margin-top: 20px;">📝 Tabella Indizi in Tempo Reale</h4>
+        <table>
+            <thead id="admin-indizi-head">
+                <tr><th>GIRI</th></tr>
+            </thead>
+            <tbody id="admin-indizi-tbody"></tbody>
+        </table>
+
+        <div class="json-box">
+            <h4>💾 Gestione Dati (JSON)</h4>
+            <button onclick="esportaDatabaseJSON()" style="background: #17a2b8;">Esporta Stato in JSON</button>
+            <label style="display:block; margin-top:10px; font-size:14px;">Importa Stato da JSON:</label>
+            <input type="file" accept=".json" onchange="importaDatabaseJSON(event)">
+        </div>
+    </div>
+</div>
+
+<script>
+    const defaultDB = {
+        iscritti: [
+            { alias: 'Pippo', password: '123' },
+            { alias: 'Pappa', password: '123' },
+            { alias: 'Pingo', password: '123' },
+            { alias: 'Palla', password: '123' },
+            { alias: 'Pollo', password: '123' }
+        ],
+        archivioParole: [
+            { argomento: "Mezzi di Trasporto", argomentoImpostore: "Mezzi Alternativi", parolaSegreta: "Treno" },
+            { argomento: "Frutti", argomentoImpostore: "Agrumi o Esotici", parolaSegreta: "Mela" },
+            { argomento: "Animali Domestici", argomentoImpostore: "Fattoria", parolaSegreta: "Gatto" },
+            { argomento: "Sport di Squadra", argomentoImpostore: "Sport Individuali", parolaSegreta: "Calcio" }
+        ],
+        gameState: {
+            sessione: 1,
+            giro: 1,
+            turnoIndex: 0,
+            argomento: "",
+            argomentoImpostore: "",
+            parolaSegreta: "",
+            giocatori: [],
+            indiziStorico: [],
+            faseImpostoreScoperto: false
+        }
+    };
+
+    function getDB() {
+        let data = localStorage.getItem('impostore_db');
+        if (!data) {
+            data = JSON.stringify(defaultDB);
+            localStorage.setItem('impostore_db', data);
+        }
+        return JSON.parse(data);
+    }
+
+    function saveDB(db) {
+        localStorage.setItem('impostore_db', JSON.stringify(db));
+        if (utenteCorrente) aggiornaUI();
+        if (!document.getElementById('view-admin').classList.contains('hidden')) {
+            renderAdminData();
+        }
+    }
+
+    setInterval(() => {
+        if (utenteCorrente) {
+            aggiornaUI();
+        }
+        if (!document.getElementById('view-admin').classList.contains('hidden')) {
+            renderAdminData();
+        }
+    }, 300);
+
+    let utenteCorrente = null;
+
+    function mostraHome() {
+        document.getElementById('view-home').classList.remove('hidden');
+        document.getElementById('view-partecipante').classList.add('hidden');
+        document.getElementById('view-admin').classList.add('hidden');
+    }
+
+    function mostraLoginPartecipante() {
+        document.getElementById('view-home').classList.add('hidden');
+        document.getElementById('view-partecipante').classList.remove('hidden');
+    }
+
+    function mostraAdmin() {
+        document.getElementById('view-home').classList.add('hidden');
+        document.getElementById('view-admin').classList.remove('hidden');
+        inizializzaAdminForm();
+        renderAdminData();
+    }
+
+    function tornaHome() { 
+        utenteCorrente = null; 
+        mostraHome(); 
+    }
+
+    function inizializzaAdminForm() {
+        let db = getDB();
+        let container = document.getElementById('admin-iscritti-list');
+        if (container.children.length === 0) {
+            db.iscritti.forEach((u, i) => {
+                container.innerHTML += `<div style="margin-bottom:5px;">
+                    <input type="text" value="${u.alias}" id="admin-alias-${i}" style="width:60%">
+                    <input type="text" value="${u.password}" id="admin-pass-${i}" style="width:30%">
+                </div>`;
+            });
+        }
+    }
+
+    function loginPartecipante() {
+        let aliasInput = document.getElementById('p-alias').value.trim();
+        let pass = document.getElementById('p-password').value.trim();
+        let db = getDB();
+
+        let user = db.iscritti.find(u => u.alias.toLowerCase() === aliasInput.toLowerCase() && u.password === pass);
+        if (!user) {
+            alert("Alias o password errati!");
+            return;
+        }
+
+        utenteCorrente = user.alias;
+        document.getElementById('partecipante-login-form').classList.add('hidden');
+        document.getElementById('partecipante-gioco').classList.remove('hidden');
+        document.getElementById('lbl-mio-alias').innerText = utenteCorrente;
+        aggiornaUI();
+    }
+
+    function inviaIndizio() {
+        let db = getDB();
+        let gs = db.gameState;
+        let input = document.getElementById('input-indizio');
+        let indizio = input.value.trim();
+        if (!indizio) return;
+
+        if (!gs.giocatori || gs.giocatori.length === 0) {
+            alert("Il torneo non è ancora iniziato dall'amministratore!");
+            return;
+        }
+
+        let giocatoreCorrente = gs.giocatori[gs.turnoIndex];
+
+        if (!giocatoreCorrente || giocatoreCorrente.alias.toLowerCase() !== utenteCorrente.toLowerCase()) {
+            alert("Non è il tuo turno!");
+            return;
+        }
+
+        if (!gs.indiziStorico[gs.giro - 1]) {
+            gs.indiziStorico[gs.giro - 1] = { giro: gs.giro, indizi: {} };
+        }
+        gs.indiziStorico[gs.giro - 1].indizi[giocatoreCorrente.alias] = indizio;
+
+        gs.turnoIndex++;
+        if (gs.turnoIndex >= gs.giocatori.length) {
+            gs.turnoIndex = 0;
+            gs.giro++;
+        }
+
+        saveDB(db);
+        input.value = '';
+    }
+
+    function accusaConcorrente() {
+        let db = getDB();
+        let gs = db.gameState;
+        let select = document.getElementById('select-accusato');
+        let accusato = select.value;
+        if (!accusato) {
+            alert("Seleziona un concorrente!");
+            return;
+        }
+
+        let me = gs.giocatori.find(g => g.alias.toLowerCase() === utenteCorrente.toLowerCase());
+        let bersaglio = gs.giocatori.find(g => g.alias.toLowerCase() === accusato.toLowerCase());
+
+        if (!me || me.tentativi <= 0) {
+            alert("Non hai più tentativi di accusa!");
+            return;
+        }
+
+        me.tentativi--;
+
+        if (bersaglio.ruolo === 'IMPOSTORE') {
+            me.punti += 3;
+            gs.faseImpostoreScoperto = true;
+            alert(`🎯 Hai scoperto l'impostore (${bersaglio.alias})! L'impostore deve indovinare la parola.`);
+        } else {
+            me.punti -= 1;
+            alert(`❌ Accusa errata! ${bersaglio.alias} non è l'impostore.`);
+        }
+
+        saveDB(db);
+    }
+
+    function tentativoParolaImpostore() {
+        let db = getDB();
+        let gs = db.gameState;
+        let parola = document.getElementById('input-parola-impostore').value.trim();
+        let me = gs.giocatori.find(g => g.alias.toLowerCase() === utenteCorrente.toLowerCase());
+
+        if (parola.toLowerCase() === gs.parolaSegreta.toLowerCase()) {
+            me.punti += 3;
+            alert(`🏆 Complimenti! Hai indovinato la parola segreta ("${gs.parolaSegreta}") +3 punti!`);
+        } else {
+            me.punti -= 3;
+            alert(`❌ Parola errata! La parola era "${gs.parolaSegreta}". -3 punti.`);
+        }
+
+        gs.sessione++;
+        gs.giro = 1;
+        gs.turnoIndex = 0;
+        gs.indiziStorico = [];
+        gs.faseImpostoreScoperto = false;
+        
+        let scelta = db.archivioParole[Math.floor(Math.random() * db.archivioParole.length)];
+        gs.argomento = scelta.argomento;
+        gs.argomentoImpostore = scelta.argomentoImpostore;
+        gs.parolaSegreta = scelta.parolaSegreta;
+
+        let impostoreIdx = Math.floor(Math.random() * gs.giocatori.length);
+        gs.giocatori.forEach((g, idx) => {
+            g.ruolo = (idx === impostoreIdx) ? 'IMPOSTORE' : 'NORMALE';
+            g.tentativi = 3;
+        });
+
+        saveDB(db);
+    }
+
+    function renderAdminData() {
+        let db = getDB();
+        let gs = db.gameState;
+        
+        document.getElementById('admin-sessione').innerText = gs.sessione;
+        document.getElementById('admin-parola-segreta').innerText = gs.parolaSegreta || '-';
+
+        let adminTocca = document.getElementById('admin-lbl-tocca');
+        if (gs.giocatori && gs.giocatori.length > 0) {
+            let corrente = gs.giocatori[gs.turnoIndex];
+            adminTocca.innerText = corrente ? corrente.alias : '-';
+            adminTocca.classList.add('turno-avviso');
+        } else {
+            adminTocca.innerText = '- (In attesa di avvio)';
+            adminTocca.classList.remove('turno-avviso');
+        }
+
+        let tbody = document.getElementById('admin-classifica-tbody');
+        tbody.innerHTML = '';
+        gs.giocatori.forEach(g => {
+            tbody.innerHTML += `<tr><td>${g.alias}</td><td>${g.punti}</td><td>${g.tentativi}</td><td>${g.ruolo}</td></tr>`;
+        });
+
+        let theadIndizi = document.getElementById('admin-indizi-head');
+        let headerHtml = '<tr><th>GIRI</th>';
+        gs.giocatori.forEach(g => {
+            headerHtml += `<th>${g.alias}</th>`;
+        });
+        headerHtml += '</tr>';
+        theadIndizi.innerHTML = headerHtml;
+
+        let tbodyIndizi = document.getElementById('admin-indizi-tbody');
+        tbodyIndizi.innerHTML = '';
+        for (let giroNum = 1; giroNum <= 6; giroNum++) {
+            let rowData = (gs.indiziStorico && gs.indiziStorico[giroNum - 1]) ? gs.indiziStorico[giroNum - 1].indizi : {};
+            let tr = `<tr><td>${giroNum}</td>`;
+            gs.giocatori.forEach(g => {
+                let indizioDato = rowData[g.alias] || '';
+                tr += `<td>${indizioDato}</td>`;
+            });
+            tr += `</tr>`;
+            tbodyIndizi.innerHTML += tr;
+        }
+    }
+
+    function avviaNuovoTorneo() {
+        let db = getDB();
+        let partecipantiSelezionati = [];
+        
+        let i = 0;
+        while (true) {
+            let inputAlias = document.getElementById(`admin-alias-${i}`);
+            if (!inputAlias) break;
+            if (inputAlias.value.trim()) {
+                partecipantiSelezionati.push(inputAlias.value.trim());
+            }
+            i++;
+        }
+
+        if (partecipantiSelezionati.length < 4) {
+            alert("Seleziona almeno 4 partecipanti!");
+            return;
+        }
+
+        let gs = db.gameState;
+        gs.sessione = 1;
+        gs.giro = 1;
+        gs.turnoIndex = 0;
+        gs.indiziStorico = [];
+        gs.faseImpostoreScoperto = false;
+
+        let scelta = db.archivioParole[Math.floor(Math.random() * db.archivioParole.length)];
+        gs.argomento = scelta.argomento;
+        gs.argomentoImpostore = scelta.argomentoImpostore;
+        gs.parolaSegreta = scelta.parolaSegreta;
+
+        let impostoreIdx = Math.floor(Math.random() * partecipantiSelezionati.length);
+        gs.giocatori = partecipantiSelezionati.map((alias, idx) => ({
+            alias: alias,
+            punti: 0,
+            tentativi: 3,
+            ruolo: (idx === impostoreIdx) ? 'IMPOSTORE' : 'NORMALE'
+        }));
+
+        saveDB(db);
+        alert("Torneo avviato con successo!");
+    }
+
+    function aggiornaUI() {
+        let db = getDB();
+        let gs = db.gameState;
+
+        if (!utenteCorrente) return;
+
+        if (!gs.giocatori || gs.giocatori.length === 0) {
+            document.getElementById('lbl-argomento').innerText = "-";
+            document.getElementById('lbl-parola').innerText = "In attesa che l'admin avvii il torneo...";
+            document.getElementById('lbl-turno-corrente').innerText = "Torneo non avviato";
+            return;
+        }
+
+        let me = gs.giocatori.find(g => g.alias.toLowerCase() === utenteCorrente.toLowerCase());
+        if (!me) {
+            document.getElementById('lbl-argomento').innerText = "-";
+            document.getElementById('lbl-parola').innerText = "Non incluso nel torneo attivo.";
+            return;
+        }
+
+        let isImpostore = (me.ruolo === 'IMPOSTORE');
+        document.getElementById('lbl-argomento').innerText = isImpostore ? gs.argomentoImpostore : gs.argomento;
+        
+        let lblParola = document.getElementById('lbl-parola');
+        let cardRuolo = document.getElementById('card-ruolo');
+        
+        if (isImpostore) {
+            lblParola.innerText = "IMPOSTORE";
+            lblParola.style.color = "#d32f2f";
+            cardRuolo.classList.add('box-impostore');
+        } else {
+            lblParola.innerText = gs.parolaSegreta;
+            lblParola.style.color = "#2e7d32";
+            cardRuolo.classList.remove('box-impostore');
+        }
+
+        document.getElementById('lbl-tentativi').innerText = me.tentativi;
+        document.getElementById('lbl-giro').innerText = gs.giro;
+
+        let corrente = gs.giocatori[gs.turnoIndex];
+        let turnoSpan = document.getElementById('lbl-turno-corrente');
+        if (corrente) {
+            turnoSpan.innerText = corrente.alias;
+            let eMioTurno = (corrente.alias.toLowerCase() === utenteCorrente.toLowerCase());
+            document.getElementById('input-indizio').disabled = !eMioTurno || gs.faseImpostoreScoperto;
+            document.getElementById('btn-invia-indizio').disabled = !eMioTurno || gs.faseImpostoreScoperto;
+        } else {
+            turnoSpan.innerText = "-";
+        }
+
+        let boxScoperto = document.getElementById('box-impostore-scoperto');
+        if (gs.faseImpostoreScoperto && isImpostore) {
+            boxScoperto.classList.remove('hidden');
+        } else {
+            boxScoperto.classList.add('hidden');
+        }
+
+        let select = document.getElementById('select-accusato');
+        select.innerHTML = '<option value="">-- Seleziona sospettato --</option>';
+        gs.giocatori.forEach(g => {
+            if (g.alias.toLowerCase() !== utenteCorrente.toLowerCase()) {
+                select.innerHTML += `<option value="${g.alias}">${g.alias}</option>`;
+            }
+        });
+    }
+
+    function esportaDatabaseJSON() {
+        let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(getDB(), null, 2));
+        let downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", "impostore_db.json");
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+    }
+
+    function importaDatabaseJSON(event) {
+        let file = event.target.files[0];
+        if (!file) return;
+        let reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                let json = JSON.parse(e.target.result);
+                localStorage.setItem('impostore_db', JSON.stringify(json));
+                alert("Stato JSON importato con successo!");
+                inizializzaAdminForm();
+                renderAdminData();
+                if (utenteCorrente) aggiornaUI();
+            } catch (err) {
+                alert("File JSON non valido!");
+            }
+        };
+        reader.readAsText(file);
+    }
+</script>
+
+</body>
+</html>
